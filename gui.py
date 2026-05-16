@@ -135,6 +135,7 @@ class ArchiverApp(ctk.CTk):
         self.level_label.pack(side="left", padx=12)
         self.pack_level.configure(command=lambda v: self.level_label.configure(text=str(int(v))))
 
+
         ctk.CTkButton(self.tab_pack, text="Запаковать", height=50, font=self.font_body, corner_radius=12,
                       fg_color=self.accent, hover_color=self.accent_hover, command=self._run_pack).pack(fill="x",
                                                                                                         pady=(8, 16))
@@ -236,10 +237,40 @@ class ArchiverApp(ctk.CTk):
 
     def _validate_paths(self, mode):
         if mode == "pack":
-            if not self.sources: return None, None, "Ошибка: Список источников пуст!"
+            if not self.sources:
+                return None, None, "Ошибка: Список источников пуст!"
             dst = self.pack_dst.get()
-            if not dst: return None, None, "Ошибка: Не выбран путь для архива!"
+            if not dst:
+                return None, None, "Ошибка: Не выбран путь для архива!"
+
+            folder_count = 0
+            file_count = 0
+            total_size = 0
+
+            for src in self.sources:
+                src = src.resolve()
+                if src.is_dir():
+                    folder_count += 1
+                    for f in src.rglob('*'):
+                        if f.is_file():
+                            file_count += 1
+                            total_size += f.stat().st_size
+                elif src.is_file():
+                    file_count += 1
+                    total_size += src.stat().st_size
+                else:
+                    return None, None, f"Путь не найден: {src}"
+
+            if folder_count > 10:
+                return None, None, f"Превышен лимит папок: {folder_count}/10"
+            if file_count > 25:
+                return None, None, f"Превышен лимит файлов: {file_count}/25"
+            if total_size > 1_073_741_824:  # 1 ГБ в байтах
+                size_gb = total_size / (1024 ** 3)
+                return None, None, f"Превышен лимит размера: {size_gb:.2f} ГБ (макс. 1 ГБ)"
+
             return self.sources, Path(dst), None
+
         elif mode == "unpack":
             src, dst = self.unpack_src.get(), self.unpack_dst.get()
             if not src or not dst: return None, None, "Ошибка: Заполните оба поля!"
